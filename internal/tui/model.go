@@ -147,6 +147,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	donutModel, cmd = m.donut.Update(msg)
 	m.donut = donutModel.(donut.Model)
+	if cmd != nil {
+		m.frame++
+	}
 	return m, cmd
 }
 
@@ -197,7 +200,7 @@ func (m Model) View() string {
 			s += fmt.Sprintf("\n\nError: %v", m.err)
 		}
 		s += "\n\n" + HelpStyle.Render("enter: next / q: quit")
-		panel := BorderStyle.Render(s)
+		panel := AnimatedBorder(s, m.frame)
 		return m.overlayOnDonut(panel)
 
 	case stepHeightInput:
