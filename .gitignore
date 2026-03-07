@@ -54,5 +54,5 @@ Temporary Items
 # iCloud generated files
 *.icloud
 .worktrees/
-tui-theme
+tui
 .vscode/
