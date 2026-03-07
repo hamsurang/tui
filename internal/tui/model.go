@@ -6,6 +6,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/hamsurang/tui/internal/config"
 	"github.com/hamsurang/tui/internal/converter"
 	"github.com/hamsurang/tui/internal/donut"
@@ -150,7 +151,7 @@ func (m Model) overlayOnDonut(panel string) string {
 
 	bgLines := strings.Split(bg, "\n")
 	for len(bgLines) < m.height {
-		bgLines = append(bgLines, "")
+		bgLines = append(bgLines, strings.Repeat(" ", m.width))
 	}
 
 	panelLines := strings.Split(panel, "\n")
@@ -159,8 +160,9 @@ func (m Model) overlayOnDonut(panel string) string {
 		if row >= len(bgLines) {
 			break
 		}
-		padding := strings.Repeat(" ", padLeft)
-		bgLines[row] = padding + pLine
+		left := ansi.Truncate(bgLines[row], padLeft, "")
+		right := ansi.TruncateLeft(bgLines[row], padLeft+panelWidth, "")
+		bgLines[row] = left + pLine + right
 	}
 
 	if len(bgLines) > m.height {
