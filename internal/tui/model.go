@@ -2,10 +2,14 @@ package tui
 
 import (
 	"fmt"
+	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/hamsurang/tui/internal/config"
 	"github.com/hamsurang/tui/internal/converter"
+	"github.com/hamsurang/tui/internal/donut"
 )
 
 type step int
@@ -34,6 +38,7 @@ type Model struct {
 	err           error
 	width         int
 	height        int
+	donut         donut.Model
 }
 
 func NewModel(mode SetupMode) Model {
@@ -42,11 +47,12 @@ func NewModel(mode SetupMode) Model {
 		step:   stepInput,
 		width:  80,
 		height: 24,
+		donut:  donut.NewModel(),
 	}
 }
 
 func (m Model) Init() tea.Cmd {
-	return nil
+	return m.donut.Init()
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -54,63 +60,65 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		if msg.Paste && m.step == stepInput {
 			m.imagePath += string(msg.Runes)
-			return m, nil
-		}
+		} else {
+			switch msg.String() {
+			case "ctrl+c", "q":
+				return m, tea.Quit
 
-		switch msg.String() {
-		case "ctrl+c", "q":
-			return m, tea.Quit
-
-
-		case "enter":
-			if m.step == stepInput && m.imagePath != "" {
-				m.resolutionIdx = 1 // internal default to Medium
-				m.updatePreview()
-				if m.err == nil {
-					m.step = stepPreview
+			case "up", "k":
+				if m.step == stepPreview && m.resolutionIdx > 0 {
+					m.resolutionIdx--
+					m.updatePreview()
 				}
-				return m, nil
-			}
-
-			if m.step == stepPreview {
-				// Save config
-				cfg, err := config.Load()
-				if err != nil {
-					cfg = &config.Config{Width: 80, Height: 20, PixelWidth: 60}
-				}
-				cfg.ImagePath = m.imagePath
-				cfg.Height = m.getTargetHeight()
-				if err := config.Save(cfg); err != nil {
-					m.err = err
-					return m, nil
+			case "down", "j":
+				if m.step == stepPreview && m.resolutionIdx < 3 {
+					m.resolutionIdx++
+					m.updatePreview()
 				}
 
-				if m.mode == ModeInit {
-					if err := config.UpdateZshrc(); err != nil {
+			case "enter":
+				if m.step == stepInput && m.imagePath != "" {
+					m.resolutionIdx = 1
+					m.updatePreview()
+					if m.err == nil {
+						m.step = stepPreview
+					}
+				} else if m.step == stepPreview {
+					cfg, err := config.Load()
+					if err != nil {
+						cfg = &config.Config{Width: 80, Height: 20, PixelWidth: 60}
+					}
+					cfg.ImagePath = m.imagePath
+					cfg.Height = m.getTargetHeight()
+					if err := config.Save(cfg); err != nil {
 						m.err = err
-						return m, nil
+					} else if m.mode == ModeInit {
+						if err := config.UpdateZshrc(); err != nil {
+							m.err = err
+						}
+					}
+
+					if m.err == nil {
+						m.step = stepSaved
 					}
 				}
 
-				m.step = stepSaved
-				return m, nil
-			}
+			case "backspace":
+				if m.step == stepInput && len(m.imagePath) > 0 {
+					runes := []rune(m.imagePath)
+					m.imagePath = string(runes[:len(runes)-1])
+				}
 
-		case "backspace":
-			if m.step == stepInput && len(m.imagePath) > 0 {
-				runes := []rune(m.imagePath)
-				m.imagePath = string(runes[:len(runes)-1])
-			}
+			case "esc":
+				if m.step == stepPreview {
+					m.step = stepInput
+					m.preview = ""
+				}
 
-		case "esc":
-			if m.step == stepPreview {
-				m.step = stepInput
-				m.preview = ""
-			}
-
-		default:
-			if m.step == stepInput && len(msg.Runes) > 0 {
-				m.imagePath += string(msg.Runes)
+			default:
+				if m.step == stepInput && len(msg.Runes) > 0 {
+					m.imagePath += string(msg.Runes)
+				}
 			}
 		}
 
@@ -119,7 +127,48 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 	}
 
-	return m, nil
+	var donutModel tea.Model
+	var cmd tea.Cmd
+	donutModel, cmd = m.donut.Update(msg)
+	m.donut = donutModel.(donut.Model)
+	return m, cmd
+}
+
+func (m Model) overlayOnDonut(panel string) string {
+	bg := m.donut.View()
+
+	panelHeight := lipgloss.Height(panel)
+	panelWidth := lipgloss.Width(panel)
+
+	padTop := (m.height - panelHeight) / 2
+	if padTop < 0 {
+		padTop = 0
+	}
+	padLeft := (m.width - panelWidth) / 2
+	if padLeft < 0 {
+		padLeft = 0
+	}
+
+	bgLines := strings.Split(bg, "\n")
+	for len(bgLines) < m.height {
+		bgLines = append(bgLines, strings.Repeat(" ", m.width))
+	}
+
+	panelLines := strings.Split(panel, "\n")
+	for i, pLine := range panelLines {
+		row := padTop + i
+		if row >= len(bgLines) {
+			break
+		}
+		left := ansi.Truncate(bgLines[row], padLeft, "")
+		right := ansi.TruncateLeft(bgLines[row], padLeft+panelWidth, "")
+		bgLines[row] = left + pLine + right
+	}
+
+	if len(bgLines) > m.height {
+		bgLines = bgLines[:m.height]
+	}
+	return strings.Join(bgLines, "\n")
 }
 
 func (m Model) View() string {
@@ -132,7 +181,8 @@ func (m Model) View() string {
 			s += fmt.Sprintf("\n\nError: %v", m.err)
 		}
 		s += "\n\n" + HelpStyle.Render("enter: next / q: quit")
-		return BorderStyle.Render(s)
+		panel := BorderStyle.Render(s)
+		return m.overlayOnDonut(panel)
 
 	case stepPreview:
 		s := TitleStyle.Render("Preview")
@@ -191,13 +241,13 @@ func (m *Model) getTargetHeight() int {
 	var targetHeight int
 	switch m.resolutionIdx {
 	case 0:
-		targetHeight = 15 // Small
+		targetHeight = 15
 	case 1:
-		targetHeight = 20 // Medium
+		targetHeight = 20
 	case 2:
-		targetHeight = 30 // Large
+		targetHeight = 30
 	case 3:
-		targetHeight = (m.height / 2) - 4 // Full (Leave space for UI)
+		targetHeight = (m.height / 2) - 4
 		if targetHeight < 10 {
 			targetHeight = 10
 		}
