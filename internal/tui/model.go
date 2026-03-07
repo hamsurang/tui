@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -16,6 +17,7 @@ type step int
 
 const (
 	stepInput step = iota
+	stepHeightInput
 	stepPreview
 	stepSaved
 )
@@ -29,16 +31,17 @@ const (
 )
 
 type Model struct {
-	mode          SetupMode
-	imagePath     string
-	preview       string
-	cursor        int
-	resolutionIdx int
-	step          step
-	err           error
-	width         int
-	height        int
-	donut         donut.Model
+	mode         SetupMode
+	imagePath    string
+	preview      string
+	cursor       int
+	heightInput  string
+	customHeight int
+	step         step
+	err          error
+	width        int
+	height       int
+	donut        donut.Model
 }
 
 func NewModel(mode SetupMode) Model {
@@ -61,67 +64,86 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Paste && m.step == stepInput {
 			m.imagePath += string(msg.Runes)
 		} else {
-			switch msg.String() {
-			case "ctrl+c", "q":
-				return m, tea.Quit
+		switch msg.String() {
+		case "ctrl+c", "q":
+			return m, tea.Quit
 
-			case "up", "k":
-				if m.step == stepPreview && m.resolutionIdx > 0 {
-					m.resolutionIdx--
-					m.updatePreview()
-				}
-			case "down", "j":
-				if m.step == stepPreview && m.resolutionIdx < 3 {
-					m.resolutionIdx++
-					m.updatePreview()
-				}
+		case "enter":
+			if m.step == stepInput && m.imagePath != "" {
+				m.step = stepHeightInput
+				m.heightInput = ""
+				return m, nil
+			}
 
-			case "enter":
-				if m.step == stepInput && m.imagePath != "" {
-					m.resolutionIdx = 1
-					m.updatePreview()
-					if m.err == nil {
-						m.step = stepPreview
-					}
-				} else if m.step == stepPreview {
-					cfg, err := config.Load()
-					if err != nil {
-						cfg = &config.Config{Width: 80, Height: 20, PixelWidth: 60}
-					}
-					cfg.ImagePath = m.imagePath
-					cfg.Height = m.getTargetHeight()
-					if err := config.Save(cfg); err != nil {
-						m.err = err
-					} else if m.mode == ModeInit {
-						if err := config.UpdateZshrc(); err != nil {
-							m.err = err
-						}
-					}
-
-					if m.err == nil {
-						m.step = stepSaved
-					}
+			if m.step == stepHeightInput {
+				// Parse the custom input, fallback to 20
+				h, err := strconv.Atoi(m.heightInput)
+				if err != nil || h <= 0 {
+					h = 20
 				}
 
-			case "backspace":
-				if m.step == stepInput && len(m.imagePath) > 0 {
-					runes := []rune(m.imagePath)
-					m.imagePath = string(runes[:len(runes)-1])
+				// Apply reasonable limits
+				maxH := (m.height / 2) - 4
+				if maxH < 10 {
+					maxH = 10
+				}
+				if h < 5 {
+					h = 5
+				} else if h > maxH {
+					h = maxH
 				}
 
-			case "esc":
-				if m.step == stepPreview {
-					m.step = stepInput
-					m.preview = ""
+				m.customHeight = h
+				m.updatePreview()
+				if m.err == nil {
+					m.step = stepPreview
 				}
+				return m, nil
+			}
 
-			default:
-				if m.step == stepInput && len(msg.Runes) > 0 {
-					m.imagePath += string(msg.Runes)
+			if m.step == stepPreview {
+				// Save config
+				cfg, err := config.Load()
+				if err != nil {
+					cfg = &config.Config{Width: 80, Height: 20, PixelWidth: 60}
+				}
+				cfg.ImagePath = m.imagePath
+				cfg.Height = m.customHeight
+				if err := config.Save(cfg); err != nil {
+					m.err = err
+					return m, nil
+				}
+			}
+
+		case "backspace":
+			if m.step == stepInput && len(m.imagePath) > 0 {
+				runes := []rune(m.imagePath)
+				m.imagePath = string(runes[:len(runes)-1])
+			} else if m.step == stepHeightInput && len(m.heightInput) > 0 {
+				runes := []rune(m.heightInput)
+				m.heightInput = string(runes[:len(runes)-1])
+			}
+
+		case "esc":
+			if m.step == stepHeightInput {
+				m.step = stepInput
+			} else if m.step == stepPreview {
+				m.step = stepHeightInput
+				m.preview = ""
+			}
+
+		default:
+			if m.step == stepInput && len(msg.Runes) > 0 {
+				m.imagePath += string(msg.Runes)
+			} else if m.step == stepHeightInput && len(msg.Runes) > 0 {
+				// Only accept numbers
+				if msg.Runes[0] >= '0' && msg.Runes[0] <= '9' {
+					m.heightInput += string(msg.Runes)
 				}
 			}
 		}
-
+	}
+	
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
@@ -184,31 +206,24 @@ func (m Model) View() string {
 		panel := BorderStyle.Render(s)
 		return m.overlayOnDonut(panel)
 
+	case stepHeightInput:
+		s := TitleStyle.Render("Set Image Height")
+		s += "\n\n"
+		s += "Enter desired height (e.g. 20 for Medium, 30 for Large):\n"
+		s += fmt.Sprintf("> %s|", m.heightInput)
+		s += "\n\n(Leave empty to use default height 20)\n"
+		if m.err != nil {
+			s += fmt.Sprintf("\n\nError: %v", m.err)
+		}
+		s += "\n\n" + HelpStyle.Render("enter: preview / esc: back / q: quit")
+		return BorderStyle.Render(s)
+
 	case stepPreview:
 		s := TitleStyle.Render("Preview")
 		s += "\n\n"
 		s += m.preview
 		s += "\n\n"
-		s += "Current Resolution: "
-
-		options := []string{"Small (15)", "Medium (20)", "Large (30)", "Full"}
-		var labeledOptions []string
-		for i, res := range options {
-			if m.resolutionIdx == i {
-				labeledOptions = append(labeledOptions, fmt.Sprintf("[ > %s < ]", res))
-			} else {
-				labeledOptions = append(labeledOptions, res)
-			}
-		}
-
-		for i, opt := range labeledOptions {
-			s += opt
-			if i < len(labeledOptions)-1 {
-				s += " | "
-			}
-		}
-
-		s += "\n(Use up/down arrow keys to change size)"
+		s += fmt.Sprintf("Current Resolution Height: %d", m.customHeight)
 
 		if m.err != nil {
 			s += fmt.Sprintf("\n\nError: %v", m.err)
@@ -237,27 +252,9 @@ func (m Model) View() string {
 	}
 }
 
-func (m *Model) getTargetHeight() int {
-	var targetHeight int
-	switch m.resolutionIdx {
-	case 0:
-		targetHeight = 15
-	case 1:
-		targetHeight = 20
-	case 2:
-		targetHeight = 30
-	case 3:
-		targetHeight = (m.height / 2) - 4
-		if targetHeight < 10 {
-			targetHeight = 10
-		}
-	}
-	return targetHeight
-}
 
 func (m *Model) updatePreview() {
-	targetHeight := m.getTargetHeight()
-	rendered, err := converter.ImageToANSI(m.imagePath, m.width, targetHeight)
+	rendered, err := converter.ImageToANSI(m.imagePath, m.width, m.customHeight)
 	if err != nil {
 		m.err = err
 		return
