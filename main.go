@@ -7,8 +7,15 @@ import (
 )
 
 func main() {
-	if len(os.Args) > 1 && os.Args[1] == "show" {
-		cmd.Show()
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "show":
+			cmd.Show()
+		case "pixeltest":
+			cmd.PixelTest()
+		default:
+			cmd.Setup()
+		}
 	} else {
 		cmd.Setup()
 	}
