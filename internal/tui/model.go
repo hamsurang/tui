@@ -42,6 +42,7 @@ type Model struct {
 	width            int
 	height           int
 	donut            donut.Model
+	frame            int
 }
 
 func NewModel(mode SetupMode) Model {
