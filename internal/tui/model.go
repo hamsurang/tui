@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"strconv"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/hamsurang/tui/internal/config"
@@ -12,6 +13,7 @@ type step int
 
 const (
 	stepInput step = iota
+	stepHeightInput
 	stepPreview
 	stepSaved
 )
@@ -25,15 +27,16 @@ const (
 )
 
 type Model struct {
-	mode          SetupMode
-	imagePath     string
-	preview       string
-	cursor        int
-	resolutionIdx int
-	step          step
-	err           error
-	width         int
-	height        int
+	mode         SetupMode
+	imagePath    string
+	preview      string
+	cursor       int
+	heightInput  string
+	customHeight int
+	step         step
+	err          error
+	width        int
+	height       int
 }
 
 func NewModel(mode SetupMode) Model {
@@ -61,10 +64,32 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+c", "q":
 			return m, tea.Quit
 
-
 		case "enter":
 			if m.step == stepInput && m.imagePath != "" {
-				m.resolutionIdx = 1 // internal default to Medium
+				m.step = stepHeightInput
+				m.heightInput = ""
+				return m, nil
+			}
+
+			if m.step == stepHeightInput {
+				// Parse the custom input, fallback to 20
+				h, err := strconv.Atoi(m.heightInput)
+				if err != nil || h <= 0 {
+					h = 20
+				}
+
+				// Apply reasonable limits
+				maxH := (m.height / 2) - 4
+				if maxH < 10 {
+					maxH = 10
+				}
+				if h < 5 {
+					h = 5
+				} else if h > maxH {
+					h = maxH
+				}
+
+				m.customHeight = h
 				m.updatePreview()
 				if m.err == nil {
 					m.step = stepPreview
@@ -79,7 +104,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					cfg = &config.Config{Width: 80, Height: 20, PixelWidth: 60}
 				}
 				cfg.ImagePath = m.imagePath
-				cfg.Height = m.getTargetHeight()
+				cfg.Height = m.customHeight
 				if err := config.Save(cfg); err != nil {
 					m.err = err
 					return m, nil
@@ -100,17 +125,27 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.step == stepInput && len(m.imagePath) > 0 {
 				runes := []rune(m.imagePath)
 				m.imagePath = string(runes[:len(runes)-1])
+			} else if m.step == stepHeightInput && len(m.heightInput) > 0 {
+				runes := []rune(m.heightInput)
+				m.heightInput = string(runes[:len(runes)-1])
 			}
 
 		case "esc":
-			if m.step == stepPreview {
+			if m.step == stepHeightInput {
 				m.step = stepInput
+			} else if m.step == stepPreview {
+				m.step = stepHeightInput
 				m.preview = ""
 			}
 
 		default:
 			if m.step == stepInput && len(msg.Runes) > 0 {
 				m.imagePath += string(msg.Runes)
+			} else if m.step == stepHeightInput {
+				// Only accept numbers
+				if msg.Runes[0] >= '0' && msg.Runes[0] <= '9' {
+					m.heightInput += string(msg.Runes)
+				}
 			}
 		}
 
@@ -134,31 +169,24 @@ func (m Model) View() string {
 		s += "\n\n" + HelpStyle.Render("enter: next / q: quit")
 		return BorderStyle.Render(s)
 
+	case stepHeightInput:
+		s := TitleStyle.Render("Set Image Height")
+		s += "\n\n"
+		s += "Enter desired height (e.g. 20 for Medium, 30 for Large):\n"
+		s += fmt.Sprintf("> %s|", m.heightInput)
+		s += "\n\n(Leave empty to use default height 20)\n"
+		if m.err != nil {
+			s += fmt.Sprintf("\n\nError: %v", m.err)
+		}
+		s += "\n\n" + HelpStyle.Render("enter: preview / esc: back / q: quit")
+		return BorderStyle.Render(s)
+
 	case stepPreview:
 		s := TitleStyle.Render("Preview")
 		s += "\n\n"
 		s += m.preview
 		s += "\n\n"
-		s += "Current Resolution: "
-
-		options := []string{"Small (15)", "Medium (20)", "Large (30)", "Full"}
-		var labeledOptions []string
-		for i, res := range options {
-			if m.resolutionIdx == i {
-				labeledOptions = append(labeledOptions, fmt.Sprintf("[ > %s < ]", res))
-			} else {
-				labeledOptions = append(labeledOptions, res)
-			}
-		}
-
-		for i, opt := range labeledOptions {
-			s += opt
-			if i < len(labeledOptions)-1 {
-				s += " | "
-			}
-		}
-
-		s += "\n(Use up/down arrow keys to change size)"
+		s += fmt.Sprintf("Current Resolution Height: %d", m.customHeight)
 
 		if m.err != nil {
 			s += fmt.Sprintf("\n\nError: %v", m.err)
@@ -187,27 +215,8 @@ func (m Model) View() string {
 	}
 }
 
-func (m *Model) getTargetHeight() int {
-	var targetHeight int
-	switch m.resolutionIdx {
-	case 0:
-		targetHeight = 15 // Small
-	case 1:
-		targetHeight = 20 // Medium
-	case 2:
-		targetHeight = 30 // Large
-	case 3:
-		targetHeight = (m.height / 2) - 4 // Full (Leave space for UI)
-		if targetHeight < 10 {
-			targetHeight = 10
-		}
-	}
-	return targetHeight
-}
-
 func (m *Model) updatePreview() {
-	targetHeight := m.getTargetHeight()
-	rendered, err := converter.ImageToANSI(m.imagePath, m.width, targetHeight)
+	rendered, err := converter.ImageToANSI(m.imagePath, m.width, m.customHeight)
 	if err != nil {
 		m.err = err
 		return
