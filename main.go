@@ -4,6 +4,7 @@ import (
 	"os"
 
 	"github.com/hamsurang/tui/cmd"
+	"github.com/hamsurang/tui/internal/tui"
 )
 
 func main() {
@@ -13,10 +14,14 @@ func main() {
 			cmd.Show()
 		case "pixeltest":
 			cmd.PixelTest()
+		case "--init":
+			cmd.Setup(tui.ModeInit)
+		case "--set":
+			cmd.Setup(tui.ModeSet)
 		default:
-			cmd.Setup()
+			cmd.Setup(tui.ModeNormal)
 		}
 	} else {
-		cmd.Setup()
+		cmd.Setup(tui.ModeNormal)
 	}
 }
