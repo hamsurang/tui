@@ -8,8 +8,8 @@ import (
 	"strings"
 
 	"github.com/disintegration/imaging"
-	"github.com/doyoonlee/tui-theme/internal/config"
-	"github.com/doyoonlee/tui-theme/internal/converter"
+	"github.com/hamsurang/tui/internal/config"
+	"github.com/hamsurang/tui/internal/converter"
 )
 
 func PixelTest() {
