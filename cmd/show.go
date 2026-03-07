@@ -16,7 +16,7 @@ func Show() {
 	}
 
 	if cfg.ImagePath == "" {
-		fmt.Println("No image configured. Run 'tui' to set up.")
+		fmt.Println("No image configured. Run '.tui' to set up.")
 		return
 	}
 
