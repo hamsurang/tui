@@ -43,6 +43,7 @@ type Model struct {
 	height           int
 	donut            donut.Model
 	frame            int
+	scrollOffset     int
 }
 
 func NewModel(mode SetupMode) Model {
@@ -94,6 +95,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.updatePreview()
 					if m.err == nil {
 						m.step = stepPreview
+						m.scrollOffset = 0
 					}
 					return m, nil
 				}
@@ -120,12 +122,36 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.pixelWidthInput = string(runes[:len(runes)-1])
 				}
 
+			case "up":
+				if m.step == stepPreview && m.scrollOffset > 0 {
+					m.scrollOffset--
+				}
+				return m, nil
+
+			case "down":
+				if m.step == stepPreview {
+					totalLines := len(strings.Split(m.preview, "\n"))
+					visibleLines := m.height - 7
+					if visibleLines < 1 {
+						visibleLines = 1
+					}
+					maxOffset := totalLines - visibleLines
+					if maxOffset < 0 {
+						maxOffset = 0
+					}
+					if m.scrollOffset < maxOffset {
+						m.scrollOffset++
+					}
+				}
+				return m, nil
+
 			case "esc":
 				if m.step == stepHeightInput {
 					m.step = stepInput
 				} else if m.step == stepPreview {
 					m.step = stepHeightInput
 					m.preview = ""
+					m.scrollOffset = 0
 				}
 
 			default:
@@ -217,17 +243,37 @@ func (m Model) View() string {
 		return BorderStyle.Render(s)
 
 	case stepPreview:
+		previewLines := strings.Split(m.preview, "\n")
+		visibleLines := m.height - 7
+		if visibleLines < 1 {
+			visibleLines = 1
+		}
+
+		maxOffset := len(previewLines) - visibleLines
+		if maxOffset < 0 {
+			maxOffset = 0
+		}
+		if m.scrollOffset > maxOffset {
+			m.scrollOffset = maxOffset
+		}
+
+		end := m.scrollOffset + visibleLines
+		if end > len(previewLines) {
+			end = len(previewLines)
+		}
+		visiblePreview := strings.Join(previewLines[m.scrollOffset:end], "\n")
+
 		s := TitleStyle.Render("Preview")
 		s += "\n\n"
-		s += m.preview
+		s += visiblePreview
 		s += "\n\n"
-		s += fmt.Sprintf("Pixel Width: %d", m.customPixelWidth)
+		s += fmt.Sprintf("Pixel Width: %d  [%d/%d]", m.customPixelWidth, m.scrollOffset+1, len(previewLines))
 
 		if m.err != nil {
 			s += fmt.Sprintf("\n\nError: %v", m.err)
 		}
 
-		s += "\n\n" + HelpStyle.Render("enter: confirm & save / esc: back / q: quit")
+		s += "\n\n" + HelpStyle.Render("↑/↓: scroll / enter: confirm & save / esc: back / q: quit")
 		return s
 
 	case stepSaved:
