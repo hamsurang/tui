@@ -5,13 +5,13 @@
 ## 빌드 & 실행
 
 ```bash
-go build -o tui .
+go build -o .tui .
 ```
 
 ### 이미지 설정 (인터랙티브 TUI)
 
 ```bash
-./tui
+./.tui
 ```
 
 이미지 경로를 입력하면 흑백 픽셀아트 프리뷰를 확인할 수 있습니다.
@@ -19,5 +19,5 @@ go build -o tui .
 ### 설정된 이미지 출력
 
 ```bash
-./tui show
+./.tui show
 ```
