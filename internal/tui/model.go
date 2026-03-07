@@ -2,7 +2,9 @@ package tui
 
 import (
 	"fmt"
+	"os"
 
+	"github.com/charmbracelet/bubbles/filepicker"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/hamsurang/tui/internal/config"
 	"github.com/hamsurang/tui/internal/converter"
@@ -34,11 +36,20 @@ type Model struct {
 	err           error
 	width         int
 	height        int
+	fp            filepicker.Model
 }
 
 func NewModel(mode SetupMode) Model {
+	fp := filepicker.New()
+	fp.AllowedTypes = []string{".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"}
+	fp.CurrentDirectory, _ = os.UserHomeDir()
+	fp.ShowPermissions = false
+	fp.ShowSize = false
+	fp.Height = 15
+
 	return Model{
 		mode:   mode,
+		fp:     fp,
 		step:   stepInput,
 		width:  80,
 		height: 24,
@@ -46,34 +57,56 @@ func NewModel(mode SetupMode) Model {
 }
 
 func (m Model) Init() tea.Cmd {
-	return nil
+	return m.fp.Init()
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		if msg.Paste && m.step == stepInput {
-			m.imagePath += string(msg.Runes)
+		switch msg.String() {
+		case "ctrl+c":
+			return m, tea.Quit
+		case "q":
+			if m.step != stepInput {
+				return m, tea.Quit
+			}
+		}
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
+		h := m.height - 10
+		if h < 5 {
+			h = 5
+		}
+		m.fp.Height = h
+	}
+
+	if m.step == stepInput {
+		var cmd tea.Cmd
+		m.fp, cmd = m.fp.Update(msg)
+
+		if didSelect, path := m.fp.DidSelectFile(msg); didSelect {
+			m.imagePath = path
+			m.resolutionIdx = 1
+			m.updatePreview()
+			if m.err == nil {
+				m.step = stepPreview
+			}
 			return m, nil
 		}
 
+		if didSelect, path := m.fp.DidSelectDisabledFile(msg); didSelect {
+			m.err = fmt.Errorf("unsupported file type: %s", path)
+			return m, cmd
+		}
+
+		return m, cmd
+	}
+
+	if msg, ok := msg.(tea.KeyMsg); ok {
 		switch msg.String() {
-		case "ctrl+c", "q":
-			return m, tea.Quit
-
-
 		case "enter":
-			if m.step == stepInput && m.imagePath != "" {
-				m.resolutionIdx = 1 // internal default to Medium
-				m.updatePreview()
-				if m.err == nil {
-					m.step = stepPreview
-				}
-				return m, nil
-			}
-
 			if m.step == stepPreview {
-				// Save config
 				cfg, err := config.Load()
 				if err != nil {
 					cfg = &config.Config{Width: 80, Height: 20, PixelWidth: 60}
@@ -96,27 +129,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 
-		case "backspace":
-			if m.step == stepInput && len(m.imagePath) > 0 {
-				runes := []rune(m.imagePath)
-				m.imagePath = string(runes[:len(runes)-1])
-			}
-
 		case "esc":
 			if m.step == stepPreview {
 				m.step = stepInput
 				m.preview = ""
-			}
-
-		default:
-			if m.step == stepInput && len(msg.Runes) > 0 {
-				m.imagePath += string(msg.Runes)
+				m.err = nil
 			}
 		}
-
-	case tea.WindowSizeMsg:
-		m.width = msg.Width
-		m.height = msg.Height
 	}
 
 	return m, nil
@@ -127,11 +146,12 @@ func (m Model) View() string {
 	case stepInput:
 		s := TitleStyle.Render("tui-theme setup")
 		s += "\n\n"
-		s += fmt.Sprintf("Image path: %s|", m.imagePath)
+		s += "Select an image file:\n\n"
+		s += m.fp.View()
 		if m.err != nil {
 			s += fmt.Sprintf("\n\nError: %v", m.err)
 		}
-		s += "\n\n" + HelpStyle.Render("enter: next / q: quit")
+		s += "\n\n" + HelpStyle.Render("enter: select / ctrl+c: quit")
 		return BorderStyle.Render(s)
 
 	case stepPreview:
