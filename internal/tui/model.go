@@ -141,7 +141,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		default:
 			if m.step == stepInput && len(msg.Runes) > 0 {
 				m.imagePath += string(msg.Runes)
-			} else if m.step == stepHeightInput {
+			} else if m.step == stepHeightInput && len(msg.Runes) > 0 {
 				// Only accept numbers
 				if msg.Runes[0] >= '0' && msg.Runes[0] <= '9' {
 					m.heightInput += string(msg.Runes)
