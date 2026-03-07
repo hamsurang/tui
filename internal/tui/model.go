@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/doyoonlee/tui-theme/internal/converter"
+	"github.com/hamsurang/tui/internal/converter"
 )
 
 type step int

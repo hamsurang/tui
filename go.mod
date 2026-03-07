@@ -1,4 +1,4 @@
-module github.com/doyoonlee/tui-theme
+module github.com/hamsurang/tui
 
 go 1.26.1
 
