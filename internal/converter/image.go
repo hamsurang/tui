@@ -48,3 +48,19 @@ func ImageToANSI(path string, width, height int) (string, error) {
 	pixelated := PixelateWithHeight(src, fitW, fitH)
 	return RenderHalfBlocks(pixelated), nil
 }
+
+func ImageToANSIByWidth(path string, targetWidth int) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	src, _, err := image.Decode(f)
+	if err != nil {
+		return "", err
+	}
+
+	pixelated := Pixelate(src, targetWidth)
+	return RenderHalfBlocks(pixelated), nil
+}

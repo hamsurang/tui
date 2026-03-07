@@ -17,7 +17,7 @@ type step int
 
 const (
 	stepInput step = iota
-	stepHeightInput
+	stepWidthInput
 	stepPreview
 	stepSaved
 )
@@ -32,12 +32,12 @@ const (
 
 type Model struct {
 	mode         SetupMode
-	imagePath    string
-	preview      string
-	cursor       int
-	heightInput  string
-	customHeight int
-	step         step
+	imagePath   string
+	preview     string
+	cursor      int
+	widthInput  string
+	customWidth int
+	step        step
 	err          error
 	width        int
 	height       int
@@ -70,30 +70,30 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "enter":
 			if m.step == stepInput && m.imagePath != "" {
-				m.step = stepHeightInput
-				m.heightInput = ""
+				m.step = stepWidthInput
+				m.widthInput = ""
 				return m, nil
 			}
 
-			if m.step == stepHeightInput {
-				// Parse the custom input, fallback to 20
-				h, err := strconv.Atoi(m.heightInput)
-				if err != nil || h <= 0 {
-					h = 20
+			if m.step == stepWidthInput {
+				// Parse the custom input, fallback to 40
+				w, err := strconv.Atoi(m.widthInput)
+				if err != nil || w <= 0 {
+					w = 40
 				}
 
 				// Apply reasonable limits
-				maxH := (m.height / 2) - 4
-				if maxH < 10 {
-					maxH = 10
+				maxW := m.width - 4
+				if maxW < 20 {
+					maxW = 20
 				}
-				if h < 5 {
-					h = 5
-				} else if h > maxH {
-					h = maxH
+				if w < 10 {
+					w = 10
+				} else if w > maxW {
+					w = maxW
 				}
 
-				m.customHeight = h
+				m.customWidth = w
 				m.updatePreview()
 				if m.err == nil {
 					m.step = stepPreview
@@ -108,37 +108,39 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					cfg = &config.Config{Width: 80, Height: 20, PixelWidth: 60}
 				}
 				cfg.ImagePath = m.imagePath
-				cfg.Height = m.customHeight
+				cfg.PixelWidth = m.customWidth
 				if err := config.Save(cfg); err != nil {
 					m.err = err
 					return m, nil
 				}
+				m.step = stepSaved
+				return m, nil
 			}
 
 		case "backspace":
 			if m.step == stepInput && len(m.imagePath) > 0 {
 				runes := []rune(m.imagePath)
 				m.imagePath = string(runes[:len(runes)-1])
-			} else if m.step == stepHeightInput && len(m.heightInput) > 0 {
-				runes := []rune(m.heightInput)
-				m.heightInput = string(runes[:len(runes)-1])
+			} else if m.step == stepWidthInput && len(m.widthInput) > 0 {
+				runes := []rune(m.widthInput)
+				m.widthInput = string(runes[:len(runes)-1])
 			}
 
 		case "esc":
-			if m.step == stepHeightInput {
+			if m.step == stepWidthInput {
 				m.step = stepInput
 			} else if m.step == stepPreview {
-				m.step = stepHeightInput
+				m.step = stepWidthInput
 				m.preview = ""
 			}
 
 		default:
 			if m.step == stepInput && len(msg.Runes) > 0 {
 				m.imagePath += string(msg.Runes)
-			} else if m.step == stepHeightInput && len(msg.Runes) > 0 {
+			} else if m.step == stepWidthInput && len(msg.Runes) > 0 {
 				// Only accept numbers
 				if msg.Runes[0] >= '0' && msg.Runes[0] <= '9' {
-					m.heightInput += string(msg.Runes)
+					m.widthInput += string(msg.Runes)
 				}
 			}
 		}
@@ -206,12 +208,12 @@ func (m Model) View() string {
 		panel := BorderStyle.Render(s)
 		return m.overlayOnDonut(panel)
 
-	case stepHeightInput:
-		s := TitleStyle.Render("Set Image Height")
+	case stepWidthInput:
+		s := TitleStyle.Render("Set Image Width")
 		s += "\n\n"
-		s += "Enter desired height (e.g. 20 for Medium, 30 for Large):\n"
-		s += fmt.Sprintf("> %s|", m.heightInput)
-		s += "\n\n(Leave empty to use default height 20)\n"
+		s += "Enter desired width (e.g. 40 for Medium, 60 for Large):\n"
+		s += fmt.Sprintf("> %s|", m.widthInput)
+		s += "\n\n(Leave empty to use default width 40)\n"
 		if m.err != nil {
 			s += fmt.Sprintf("\n\nError: %v", m.err)
 		}
@@ -223,7 +225,7 @@ func (m Model) View() string {
 		s += "\n\n"
 		s += m.preview
 		s += "\n\n"
-		s += fmt.Sprintf("Current Resolution Height: %d", m.customHeight)
+		s += fmt.Sprintf("Current Resolution Width: %d", m.customWidth)
 
 		if m.err != nil {
 			s += fmt.Sprintf("\n\nError: %v", m.err)
@@ -254,7 +256,7 @@ func (m Model) View() string {
 
 
 func (m *Model) updatePreview() {
-	rendered, err := converter.ImageToANSI(m.imagePath, m.width, m.customHeight)
+	rendered, err := converter.ImageToANSIByWidth(m.imagePath, m.customWidth)
 	if err != nil {
 		m.err = err
 		return
