@@ -5,7 +5,7 @@ import (
 	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/doyoonlee/tui-theme/internal/tui"
+	"github.com/hamsurang/tui/internal/tui"
 )
 
 func Setup() {

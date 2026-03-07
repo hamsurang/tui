@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/doyoonlee/tui-theme/internal/config"
-	"github.com/doyoonlee/tui-theme/internal/converter"
+	"github.com/hamsurang/tui/internal/config"
+	"github.com/hamsurang/tui/internal/converter"
 )
 
 func Show() {

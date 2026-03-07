@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"github.com/doyoonlee/tui-theme/cmd"
+	"github.com/hamsurang/tui/cmd"
 )
 
 func main() {
