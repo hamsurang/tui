@@ -12,8 +12,6 @@ func main() {
 		switch os.Args[1] {
 		case "show":
 			cmd.Show()
-		case "pixeltest":
-			cmd.PixelTest()
 		case "--init":
 			cmd.Setup(tui.ModeInit)
 		case "--set":
