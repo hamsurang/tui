@@ -7,9 +7,10 @@ import (
 )
 
 type Config struct {
-	ImagePath string `json:"image_path"`
-	Width     int    `json:"width"`
-	Height    int    `json:"height"`
+	ImagePath  string `json:"image_path"`
+	Width      int    `json:"width"`
+	Height     int    `json:"height"`
+	PixelWidth int    `json:"pixel_width"`
 }
 
 func configDir() string {
@@ -24,7 +25,7 @@ func configPath() string {
 func Load() (*Config, error) {
 	data, err := os.ReadFile(configPath())
 	if err != nil {
-		return &Config{Width: 80, Height: 20}, nil
+		return &Config{Width: 80, Height: 20, PixelWidth: 60}, nil
 	}
 	var cfg Config
 	if err := json.Unmarshal(data, &cfg); err != nil {

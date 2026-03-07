@@ -3,7 +3,10 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 
+	"github.com/disintegration/imaging"
 	"github.com/hamsurang/tui/internal/config"
 	"github.com/hamsurang/tui/internal/converter"
 )
@@ -16,24 +19,33 @@ func Show() {
 	}
 
 	if cfg.ImagePath == "" {
-		fmt.Println("No image configured. Run '.tui' to set up.")
+		fmt.Println("No image configured. Run 'tui-theme pixeltest <image> <width> --save' to set up.")
 		return
 	}
 
-	width := cfg.Width
-	if width == 0 {
-		width = 80
-	}
-	height := cfg.Height
-	if height == 0 {
-		height = 20
+	name := strings.TrimSuffix(filepath.Base(cfg.ImagePath), filepath.Ext(cfg.ImagePath))
+
+	rendered, err := converter.LoadPixelArt(name)
+	if err == nil {
+		fmt.Print(rendered)
+		return
 	}
 
-	rendered, err := converter.ImageToANSI(cfg.ImagePath, width, height)
+	pixelWidth := cfg.PixelWidth
+	if pixelWidth == 0 {
+		pixelWidth = 60
+	}
+
+	src, err := imaging.Open(cfg.ImagePath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Image error: %v\n", err)
 		os.Exit(1)
 	}
+
+	pixelated := converter.Pixelate(src, pixelWidth)
+	rendered = converter.RenderHalfBlocks(pixelated)
+
+	converter.SavePixelArt(rendered, name)
 
 	fmt.Print(rendered)
 }
