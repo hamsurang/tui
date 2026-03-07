@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/disintegration/imaging"
 	"github.com/hamsurang/tui/internal/config"
 	"github.com/hamsurang/tui/internal/converter"
 )
@@ -25,27 +24,29 @@ func Show() {
 
 	name := strings.TrimSuffix(filepath.Base(cfg.ImagePath), filepath.Ext(cfg.ImagePath))
 
-	rendered, err := converter.LoadPixelArt(name)
-	if err == nil {
-		fmt.Print(rendered)
-		return
+	// Bypass the cache logic we had before, since users might have changed the target height dynamically.
+	// rendered, err := converter.LoadPixelArt(name)
+	// if err == nil {
+	// 	fmt.Print(rendered)
+	// 	return
+	// }
+
+	terminalWidth := 80 // Default target terminal width. You might want to get actual width here if necessary.
+	if cfg.Width != 0 {
+		terminalWidth = cfg.Width
+	}
+	targetHeight := cfg.Height
+	if targetHeight <= 0 {
+		targetHeight = 20
 	}
 
-	pixelWidth := cfg.PixelWidth
-	if pixelWidth == 0 {
-		pixelWidth = 60
-	}
-
-	src, err := imaging.Open(cfg.ImagePath)
+	rendered, err := converter.ImageToANSI(cfg.ImagePath, terminalWidth, targetHeight)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Image error: %v\n", err)
 		os.Exit(1)
 	}
 
-	pixelated := converter.Pixelate(src, pixelWidth)
-	rendered = converter.RenderHalfBlocks(pixelated)
-
-	converter.SavePixelArt(rendered, name)
+	converter.SavePixelArt(rendered, fmt.Sprintf("%s_%dx%d", name, terminalWidth, targetHeight))
 
 	fmt.Print(rendered)
 }

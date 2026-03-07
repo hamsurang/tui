@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/hamsurang/tui/internal/config"
 	"github.com/hamsurang/tui/internal/converter"
 )
 
@@ -15,18 +16,29 @@ const (
 	stepSaved
 )
 
+type SetupMode int
+
+const (
+	ModeNormal SetupMode = iota
+	ModeInit
+	ModeSet
+)
+
 type Model struct {
-	imagePath string
-	preview   string
-	cursor    int
-	step      step
-	err       error
-	width     int
-	height    int
+	mode          SetupMode
+	imagePath     string
+	preview       string
+	cursor        int
+	resolutionIdx int
+	step          step
+	err           error
+	width         int
+	height        int
 }
 
-func NewModel() Model {
+func NewModel(mode SetupMode) Model {
 	return Model{
+		mode:   mode,
 		step:   stepInput,
 		width:  80,
 		height: 24,
@@ -49,16 +61,39 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+c", "q":
 			return m, tea.Quit
 
+
 		case "enter":
 			if m.step == stepInput && m.imagePath != "" {
-				rendered, err := converter.ImageToANSI(m.imagePath, m.width, 20)
+				m.resolutionIdx = 1 // internal default to Medium
+				m.updatePreview()
+				if m.err == nil {
+					m.step = stepPreview
+				}
+				return m, nil
+			}
+
+			if m.step == stepPreview {
+				// Save config
+				cfg, err := config.Load()
 				if err != nil {
+					cfg = &config.Config{Width: 80, Height: 20, PixelWidth: 60}
+				}
+				cfg.ImagePath = m.imagePath
+				cfg.Height = m.getTargetHeight()
+				if err := config.Save(cfg); err != nil {
 					m.err = err
 					return m, nil
 				}
-				m.preview = rendered
-				m.step = stepPreview
-				m.err = nil
+
+				if m.mode == ModeInit {
+					if err := config.UpdateZshrc(); err != nil {
+						m.err = err
+						return m, nil
+					}
+				}
+
+				m.step = stepSaved
+				return m, nil
 			}
 
 		case "backspace":
@@ -96,17 +131,87 @@ func (m Model) View() string {
 		if m.err != nil {
 			s += fmt.Sprintf("\n\nError: %v", m.err)
 		}
-		s += "\n\n" + HelpStyle.Render("enter: preview / q: quit")
+		s += "\n\n" + HelpStyle.Render("enter: next / q: quit")
 		return BorderStyle.Render(s)
 
 	case stepPreview:
 		s := TitleStyle.Render("Preview")
 		s += "\n\n"
 		s += m.preview
-		s += "\n" + HelpStyle.Render("esc: back / q: quit")
+		s += "\n\n"
+		s += "Current Resolution: "
+
+		options := []string{"Small (15)", "Medium (20)", "Large (30)", "Full"}
+		var labeledOptions []string
+		for i, res := range options {
+			if m.resolutionIdx == i {
+				labeledOptions = append(labeledOptions, fmt.Sprintf("[ > %s < ]", res))
+			} else {
+				labeledOptions = append(labeledOptions, res)
+			}
+		}
+
+		for i, opt := range labeledOptions {
+			s += opt
+			if i < len(labeledOptions)-1 {
+				s += " | "
+			}
+		}
+
+		s += "\n(Use up/down arrow keys to change size)"
+
+		if m.err != nil {
+			s += fmt.Sprintf("\n\nError: %v", m.err)
+		}
+
+		s += "\n\n" + HelpStyle.Render("enter: confirm & save / esc: back / q: quit")
 		return s
+
+	case stepSaved:
+		s := TitleStyle.Render("tui-theme setup")
+		s += "\n\n"
+
+		if m.mode == ModeInit {
+			s += "Configuration saved and ~/.zshrc updated!\n"
+		} else if m.mode == ModeSet {
+			s += "Image configuration updated successfully!\n"
+		} else {
+			s += "Configuration saved.\n"
+		}
+
+		s += "\n" + HelpStyle.Render("q: quit")
+		return BorderStyle.Render(s)
 
 	default:
 		return "Done!"
 	}
+}
+
+func (m *Model) getTargetHeight() int {
+	var targetHeight int
+	switch m.resolutionIdx {
+	case 0:
+		targetHeight = 15 // Small
+	case 1:
+		targetHeight = 20 // Medium
+	case 2:
+		targetHeight = 30 // Large
+	case 3:
+		targetHeight = (m.height / 2) - 4 // Full (Leave space for UI)
+		if targetHeight < 10 {
+			targetHeight = 10
+		}
+	}
+	return targetHeight
+}
+
+func (m *Model) updatePreview() {
+	targetHeight := m.getTargetHeight()
+	rendered, err := converter.ImageToANSI(m.imagePath, m.width, targetHeight)
+	if err != nil {
+		m.err = err
+		return
+	}
+	m.preview = rendered
+	m.err = nil
 }
