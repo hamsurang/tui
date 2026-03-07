@@ -31,17 +31,17 @@ const (
 )
 
 type Model struct {
-	mode         SetupMode
-	imagePath    string
-	preview      string
-	cursor       int
-	heightInput  string
-	customHeight int
-	step         step
-	err          error
-	width        int
-	height       int
-	donut        donut.Model
+	mode             SetupMode
+	imagePath        string
+	preview          string
+	cursor           int
+	pixelWidthInput  string
+	customPixelWidth int
+	step             step
+	err              error
+	width            int
+	height           int
+	donut            donut.Model
 }
 
 func NewModel(mode SetupMode) Model {
@@ -64,86 +64,80 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Paste && m.step == stepInput {
 			m.imagePath += string(msg.Runes)
 		} else {
-		switch msg.String() {
-		case "ctrl+c", "q":
-			return m, tea.Quit
+			switch msg.String() {
+			case "ctrl+c", "q":
+				return m, tea.Quit
 
-		case "enter":
-			if m.step == stepInput && m.imagePath != "" {
-				m.step = stepHeightInput
-				m.heightInput = ""
-				return m, nil
-			}
-
-			if m.step == stepHeightInput {
-				// Parse the custom input, fallback to 20
-				h, err := strconv.Atoi(m.heightInput)
-				if err != nil || h <= 0 {
-					h = 20
-				}
-
-				// Apply reasonable limits
-				maxH := (m.height / 2) - 4
-				if maxH < 10 {
-					maxH = 10
-				}
-				if h < 5 {
-					h = 5
-				} else if h > maxH {
-					h = maxH
-				}
-
-				m.customHeight = h
-				m.updatePreview()
-				if m.err == nil {
-					m.step = stepPreview
-				}
-				return m, nil
-			}
-
-			if m.step == stepPreview {
-				// Save config
-				cfg, err := config.Load()
-				if err != nil {
-					cfg = &config.Config{Width: 80, Height: 20, PixelWidth: 60}
-				}
-				cfg.ImagePath = m.imagePath
-				cfg.Height = m.customHeight
-				if err := config.Save(cfg); err != nil {
-					m.err = err
+			case "enter":
+				if m.step == stepInput && m.imagePath != "" {
+					m.step = stepHeightInput
+					m.pixelWidthInput = ""
 					return m, nil
 				}
-			}
 
-		case "backspace":
-			if m.step == stepInput && len(m.imagePath) > 0 {
-				runes := []rune(m.imagePath)
-				m.imagePath = string(runes[:len(runes)-1])
-			} else if m.step == stepHeightInput && len(m.heightInput) > 0 {
-				runes := []rune(m.heightInput)
-				m.heightInput = string(runes[:len(runes)-1])
-			}
+				if m.step == stepHeightInput {
+					// Parse the custom input, fallback to 60
+					w, err := strconv.Atoi(m.pixelWidthInput)
+					if err != nil || w <= 0 {
+						w = 60
+					}
 
-		case "esc":
-			if m.step == stepHeightInput {
-				m.step = stepInput
-			} else if m.step == stepPreview {
-				m.step = stepHeightInput
-				m.preview = ""
-			}
+					// Apply reasonable limits
+					if w < 8 {
+						w = 8
+					} else if w > m.width {
+						w = m.width
+					}
 
-		default:
-			if m.step == stepInput && len(msg.Runes) > 0 {
-				m.imagePath += string(msg.Runes)
-			} else if m.step == stepHeightInput && len(msg.Runes) > 0 {
-				// Only accept numbers
-				if msg.Runes[0] >= '0' && msg.Runes[0] <= '9' {
-					m.heightInput += string(msg.Runes)
+					m.customPixelWidth = w
+					m.updatePreview()
+					if m.err == nil {
+						m.step = stepPreview
+					}
+					return m, nil
+				}
+
+				if m.step == stepPreview {
+					cfg, err := config.Load()
+					if err != nil {
+						cfg = &config.Config{Width: 80, Height: 20, PixelWidth: 60}
+					}
+					cfg.ImagePath = m.imagePath
+					cfg.PixelWidth = m.customPixelWidth
+					if err := config.Save(cfg); err != nil {
+						m.err = err
+						return m, nil
+					}
+				}
+
+			case "backspace":
+				if m.step == stepInput && len(m.imagePath) > 0 {
+					runes := []rune(m.imagePath)
+					m.imagePath = string(runes[:len(runes)-1])
+				} else if m.step == stepHeightInput && len(m.pixelWidthInput) > 0 {
+					runes := []rune(m.pixelWidthInput)
+					m.pixelWidthInput = string(runes[:len(runes)-1])
+				}
+
+			case "esc":
+				if m.step == stepHeightInput {
+					m.step = stepInput
+				} else if m.step == stepPreview {
+					m.step = stepHeightInput
+					m.preview = ""
+				}
+
+			default:
+				if m.step == stepInput && len(msg.Runes) > 0 {
+					m.imagePath += string(msg.Runes)
+				} else if m.step == stepHeightInput && len(msg.Runes) > 0 {
+					if msg.Runes[0] >= '0' && msg.Runes[0] <= '9' {
+						m.pixelWidthInput += string(msg.Runes)
+					}
 				}
 			}
 		}
-	}
-	
+
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
@@ -207,11 +201,11 @@ func (m Model) View() string {
 		return m.overlayOnDonut(panel)
 
 	case stepHeightInput:
-		s := TitleStyle.Render("Set Image Height")
+		s := TitleStyle.Render("Set Pixel Width")
 		s += "\n\n"
-		s += "Enter desired height (e.g. 20 for Medium, 30 for Large):\n"
-		s += fmt.Sprintf("> %s|", m.heightInput)
-		s += "\n\n(Leave empty to use default height 20)\n"
+		s += "Enter pixel width (e.g. 40 for Small, 60 for Medium, 80 for Large):\n"
+		s += fmt.Sprintf("> %s|", m.pixelWidthInput)
+		s += "\n\n(Leave empty to use default: 60)\n"
 		if m.err != nil {
 			s += fmt.Sprintf("\n\nError: %v", m.err)
 		}
@@ -223,7 +217,7 @@ func (m Model) View() string {
 		s += "\n\n"
 		s += m.preview
 		s += "\n\n"
-		s += fmt.Sprintf("Current Resolution Height: %d", m.customHeight)
+		s += fmt.Sprintf("Pixel Width: %d", m.customPixelWidth)
 
 		if m.err != nil {
 			s += fmt.Sprintf("\n\nError: %v", m.err)
@@ -252,9 +246,8 @@ func (m Model) View() string {
 	}
 }
 
-
 func (m *Model) updatePreview() {
-	rendered, err := converter.ImageToANSI(m.imagePath, m.width, m.customHeight)
+	rendered, err := converter.ImageToANSIByPixelWidth(m.imagePath, m.customPixelWidth)
 	if err != nil {
 		m.err = err
 		return

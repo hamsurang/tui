@@ -31,22 +31,18 @@ func Show() {
 	// 	return
 	// }
 
-	terminalWidth := 80 // Default target terminal width. You might want to get actual width here if necessary.
-	if cfg.Width != 0 {
-		terminalWidth = cfg.Width
-	}
-	targetHeight := cfg.Height
-	if targetHeight <= 0 {
-		targetHeight = 20
+	pixelWidth := cfg.PixelWidth
+	if pixelWidth <= 0 {
+		pixelWidth = 60
 	}
 
-	rendered, err := converter.ImageToANSI(cfg.ImagePath, terminalWidth, targetHeight)
+	rendered, err := converter.ImageToANSIByPixelWidth(cfg.ImagePath, pixelWidth)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Image error: %v\n", err)
 		os.Exit(1)
 	}
 
-	converter.SavePixelArt(rendered, fmt.Sprintf("%s_%dx%d", name, terminalWidth, targetHeight))
+	converter.SavePixelArt(rendered, fmt.Sprintf("%s_%d", name, pixelWidth))
 
 	fmt.Print(rendered)
 }
