@@ -49,12 +49,12 @@ type Model struct {
 
 func NewModel() Model {
 	donuts := []donutInstance{
-		{a: 0, b: 0, speedA: 0.04, speedB: 0.02, size: 0.30, color: lipgloss.Color("#84B179"), velX: -1.8, velY: 1.2, delay: 0, lane: 0},
+		{a: 0, b: 0, speedA: 0.04, speedB: 0.02, size: 0.30, color: lipgloss.Color("#84B179"), velX: -1.8, velY: 1.2, delay: 0, lane: 5},
 		{a: 1.0, b: 0.5, speedA: 0.07, speedB: 0.03, size: 0.21, color: lipgloss.Color("#A2CB8B"), velX: -1.8, velY: 1.2, delay: 10, lane: 1},
 		{a: 2.0, b: 1.0, speedA: 0.03, speedB: 0.05, size: 0.24, color: lipgloss.Color("#576A8F"), velX: -1.8, velY: 1.2, delay: 20, lane: 2},
 		{a: 0.5, b: 2.0, speedA: 0.06, speedB: 0.01, size: 0.18, color: lipgloss.Color("#C7EABB"), velX: -1.8, velY: 1.2, delay: 30, lane: 3},
 		{a: 3.0, b: 1.5, speedA: 0.02, speedB: 0.06, size: 0.225, color: lipgloss.Color("#E8F5BD"), velX: -1.8, velY: 1.2, delay: 40, lane: 4},
-		{a: 1.5, b: 0.3, speedA: 0.05, speedB: 0.04, size: 0.20, color: lipgloss.Color("#FF7444"), velX: -1.8, velY: 1.2, delay: 50, lane: 5},
+		{a: 1.5, b: 0.3, speedA: 0.05, speedB: 0.04, size: 0.20, color: lipgloss.Color("#FF7444"), velX: -1.8, velY: 1.2, delay: 50, lane: 0},
 		{a: 0.8, b: 1.8, speedA: 0.03, speedB: 0.06, size: 0.26, color: lipgloss.Color("#84B179"), velX: -1.8, velY: 1.2, delay: 60, lane: 6},
 		{a: 2.5, b: 0.7, speedA: 0.06, speedB: 0.02, size: 0.19, color: lipgloss.Color("#A2CB8B"), velX: -1.8, velY: 1.2, delay: 70, lane: 7},
 	}
