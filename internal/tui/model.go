@@ -3,10 +3,14 @@ package tui
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/hamsurang/tui/internal/config"
 	"github.com/hamsurang/tui/internal/converter"
+	"github.com/hamsurang/tui/internal/donut"
 )
 
 type step int
@@ -37,6 +41,7 @@ type Model struct {
 	err          error
 	width        int
 	height       int
+	donut        donut.Model
 }
 
 func NewModel(mode SetupMode) Model {
@@ -45,11 +50,12 @@ func NewModel(mode SetupMode) Model {
 		step:   stepInput,
 		width:  80,
 		height: 24,
+		donut:  donut.NewModel(),
 	}
 }
 
 func (m Model) Init() tea.Cmd {
-	return nil
+	return m.donut.Init()
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -57,9 +63,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		if msg.Paste && m.step == stepInput {
 			m.imagePath += string(msg.Runes)
-			return m, nil
-		}
-
+		} else {
 		switch msg.String() {
 		case "ctrl+c", "q":
 			return m, tea.Quit
@@ -109,16 +113,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.err = err
 					return m, nil
 				}
-
-				if m.mode == ModeInit {
-					if err := config.UpdateZshrc(); err != nil {
-						m.err = err
-						return m, nil
-					}
-				}
-
-				m.step = stepSaved
-				return m, nil
 			}
 
 		case "backspace":
@@ -148,13 +142,55 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 		}
-
+	}
+	
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
 	}
 
-	return m, nil
+	var donutModel tea.Model
+	var cmd tea.Cmd
+	donutModel, cmd = m.donut.Update(msg)
+	m.donut = donutModel.(donut.Model)
+	return m, cmd
+}
+
+func (m Model) overlayOnDonut(panel string) string {
+	bg := m.donut.View()
+
+	panelHeight := lipgloss.Height(panel)
+	panelWidth := lipgloss.Width(panel)
+
+	padTop := (m.height - panelHeight) / 2
+	if padTop < 0 {
+		padTop = 0
+	}
+	padLeft := (m.width - panelWidth) / 2
+	if padLeft < 0 {
+		padLeft = 0
+	}
+
+	bgLines := strings.Split(bg, "\n")
+	for len(bgLines) < m.height {
+		bgLines = append(bgLines, strings.Repeat(" ", m.width))
+	}
+
+	panelLines := strings.Split(panel, "\n")
+	for i, pLine := range panelLines {
+		row := padTop + i
+		if row >= len(bgLines) {
+			break
+		}
+		left := ansi.Truncate(bgLines[row], padLeft, "")
+		right := ansi.TruncateLeft(bgLines[row], padLeft+panelWidth, "")
+		bgLines[row] = left + pLine + right
+	}
+
+	if len(bgLines) > m.height {
+		bgLines = bgLines[:m.height]
+	}
+	return strings.Join(bgLines, "\n")
 }
 
 func (m Model) View() string {
@@ -167,7 +203,8 @@ func (m Model) View() string {
 			s += fmt.Sprintf("\n\nError: %v", m.err)
 		}
 		s += "\n\n" + HelpStyle.Render("enter: next / q: quit")
-		return BorderStyle.Render(s)
+		panel := BorderStyle.Render(s)
+		return m.overlayOnDonut(panel)
 
 	case stepHeightInput:
 		s := TitleStyle.Render("Set Image Height")
@@ -214,6 +251,7 @@ func (m Model) View() string {
 		return "Done!"
 	}
 }
+
 
 func (m *Model) updatePreview() {
 	rendered, err := converter.ImageToANSI(m.imagePath, m.width, m.customHeight)
