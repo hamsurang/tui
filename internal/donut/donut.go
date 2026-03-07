@@ -50,13 +50,13 @@ type Model struct {
 func NewModel() Model {
 	donuts := []donutInstance{
 		{a: 0, b: 0, speedA: 0.04, speedB: 0.02, size: 0.30, color: lipgloss.Color("#84B179"), velX: -1.8, velY: 1.2, delay: 0, lane: 0},
-		{a: 1.0, b: 0.5, speedA: 0.07, speedB: 0.03, size: 0.21, color: lipgloss.Color("#A2CB8B"), velX: -1.8, velY: 1.2, delay: 25, lane: 1},
-		{a: 2.0, b: 1.0, speedA: 0.03, speedB: 0.05, size: 0.24, color: lipgloss.Color("#576A8F"), velX: -1.8, velY: 1.2, delay: 50, lane: 2},
-		{a: 0.5, b: 2.0, speedA: 0.06, speedB: 0.01, size: 0.18, color: lipgloss.Color("#C7EABB"), velX: -1.8, velY: 1.2, delay: 75, lane: 3},
-		{a: 3.0, b: 1.5, speedA: 0.02, speedB: 0.06, size: 0.225, color: lipgloss.Color("#E8F5BD"), velX: -1.8, velY: 1.2, delay: 100, lane: 4},
-		{a: 1.5, b: 0.3, speedA: 0.05, speedB: 0.04, size: 0.20, color: lipgloss.Color("#FF7444"), velX: -1.8, velY: 1.2, delay: 125, lane: 5},
-		{a: 0.8, b: 1.8, speedA: 0.03, speedB: 0.06, size: 0.26, color: lipgloss.Color("#84B179"), velX: -1.8, velY: 1.2, delay: 150, lane: 6},
-		{a: 2.5, b: 0.7, speedA: 0.06, speedB: 0.02, size: 0.19, color: lipgloss.Color("#A2CB8B"), velX: -1.8, velY: 1.2, delay: 175, lane: 7},
+		{a: 1.0, b: 0.5, speedA: 0.07, speedB: 0.03, size: 0.21, color: lipgloss.Color("#A2CB8B"), velX: -1.8, velY: 1.2, delay: 10, lane: 1},
+		{a: 2.0, b: 1.0, speedA: 0.03, speedB: 0.05, size: 0.24, color: lipgloss.Color("#576A8F"), velX: -1.8, velY: 1.2, delay: 20, lane: 2},
+		{a: 0.5, b: 2.0, speedA: 0.06, speedB: 0.01, size: 0.18, color: lipgloss.Color("#C7EABB"), velX: -1.8, velY: 1.2, delay: 30, lane: 3},
+		{a: 3.0, b: 1.5, speedA: 0.02, speedB: 0.06, size: 0.225, color: lipgloss.Color("#E8F5BD"), velX: -1.8, velY: 1.2, delay: 40, lane: 4},
+		{a: 1.5, b: 0.3, speedA: 0.05, speedB: 0.04, size: 0.20, color: lipgloss.Color("#FF7444"), velX: -1.8, velY: 1.2, delay: 50, lane: 5},
+		{a: 0.8, b: 1.8, speedA: 0.03, speedB: 0.06, size: 0.26, color: lipgloss.Color("#84B179"), velX: -1.8, velY: 1.2, delay: 60, lane: 6},
+		{a: 2.5, b: 0.7, speedA: 0.06, speedB: 0.02, size: 0.19, color: lipgloss.Color("#A2CB8B"), velX: -1.8, velY: 1.2, delay: 70, lane: 7},
 	}
 	return Model{
 		width:  80,
@@ -114,7 +114,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			d.posX += d.velX
 			d.posY += d.velY
 
-			if d.posX < -20 || d.posY > float64(m.height)+20 {
+			if d.posX < -10 || d.posY > float64(m.height)+10 {
 				m = m.spawnAt(i)
 			}
 		}
@@ -189,12 +189,21 @@ func (m Model) View() string {
 	return result
 }
 
+func pseudoRand(seed int) int {
+	seed = seed*1103515245 + 12345
+	if seed < 0 {
+		seed = -seed
+	}
+	return seed
+}
+
 func (m Model) renderTrail(d donutInstance, screen [][]rune, colors [][]lipgloss.Color) {
 	if len(d.trail) < 2 {
 		return
 	}
 
-	trailChars := []rune{'*', '*', '#', '=', '=', ';', ';', ':', ':', '~', '~', '-', '-', '.', '.'}
+	trailChars := []rune{'*', '+', '*', '#', '=', '+', ';', ':', '~', '.', '-', '.', '.', '.', '.'}
+	sparkleChars := []rune{'+', '*', '.', '\'', '`', ','}
 
 	totalPoints := len(d.trail)
 	for i := 0; i < totalPoints-1; i++ {
@@ -237,6 +246,27 @@ func (m Model) renderTrail(d donutInstance, screen [][]rune, colors [][]lipgloss
 			colors[py][px] = d.color
 			if fade > 0.5 {
 				colors[py][px] = lipgloss.Color(itoa(dimLevel))
+			}
+
+			hash := pseudoRand(px*397 + py*263 + m.frame*179 + i*31)
+			if hash%3 == 0 {
+				offsets := [4][2]int{{-1, 0}, {1, 0}, {0, -1}, {0, 1}}
+				oi := hash % 4
+				ox, oy := px+offsets[oi][0], py+offsets[oi][1]
+				if ox >= 0 && ox < m.width && oy >= 0 && oy < m.height && screen[oy][ox] == ' ' {
+					si := (hash / 4) % len(sparkleChars)
+					screen[oy][ox] = sparkleChars[si]
+
+					if fade < 0.3 {
+						colors[oy][ox] = d.color
+					} else {
+						sparkDim := 250 - int(fade*14)
+						if sparkDim < 240 {
+							sparkDim = 240
+						}
+						colors[oy][ox] = lipgloss.Color(itoa(sparkDim))
+					}
+				}
 			}
 		}
 	}
