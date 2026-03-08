@@ -1,0 +1,39 @@
+version: 2
+
+project_name: tui
+
+builds:
+  - main: .
+    binary: tui
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    env:
+      - CGO_ENABLED=0
+    ldflags:
+      - -s -w
+
+archives:
+  - format: tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+brews:
+  - repository:
+      owner: hamsurang
+      name: homebrew-tap
+    homepage: "https://github.com/hamsurang/tui"
+    description: "터미널에서 이미지를 1-bit 픽셀아트 스타일로 프리뷰하는 TUI 앱"
+    license: "MIT"
+    install: |
+      bin.install "tui"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
